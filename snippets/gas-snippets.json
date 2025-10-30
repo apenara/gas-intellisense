@@ -1,0 +1,77 @@
+{
+  "onOpen Trigger": {
+    "prefix": "onOpen",
+    "body": [
+      "function onOpen(e) {",
+      "  const ui = SpreadsheetApp.getUi();",
+      "  ui.createMenu('${1:Custom Menu}')",
+      "    .addItem('${2:Menu Item}', '${3:functionName}')",
+      "    .addToUi();",
+      "}"
+    ],
+    "description": "Create an onOpen trigger with custom menu for Sheets"
+  },
+  "onEdit Trigger": {
+    "prefix": "onEdit",
+    "body": [
+      "function onEdit(e) {",
+      "  const sheet = e.source.getActiveSheet();",
+      "  const range = e.range;",
+      "  ",
+      "  // Get edited cell info",
+      "  const row = range.getRow();",
+      "  const col = range.getColumn();",
+      "  const value = e.value;",
+      "  ",
+      "  Logger.log('Cell edited: ' + sheet.getName() + ' [' + row + ',' + col + '] = ' + value);",
+      "  $0",
+      "}"
+    ],
+    "description": "Create an onEdit trigger for Sheets with event handling"
+  },
+  "doGet Web App": {
+    "prefix": "doGet",
+    "body": [
+      "function doGet(e) {",
+      "  // Handle GET request parameters",
+      "  const params = e.parameter;",
+      "  ",
+      "  // Return HTML output",
+      "  return HtmlService.createHtmlOutput(",
+      "    '<h1>${1:Hello from Google Apps Script}</h1>'",
+      "  ).setTitle('${2:Web App Title}');",
+      "  ",
+      "  // Or return JSON",
+      "  // return ContentService",
+      "  //   .createTextOutput(JSON.stringify({ status: 'success' }))",
+      "  //   .setMimeType(ContentService.MimeType.JSON);",
+      "}"
+    ],
+    "description": "Create a doGet handler for web apps (GET requests)"
+  },
+  "Get Active Sheet": {
+    "prefix": "getActiveSheet",
+    "body": [
+      "const ss = SpreadsheetApp.getActiveSpreadsheet();",
+      "const sheet = ss.getActiveSheet();",
+      "$0"
+    ],
+    "description": "Get the active spreadsheet and sheet"
+  },
+  "Send Email": {
+    "prefix": "sendEmail",
+    "body": [
+      "MailApp.sendEmail({",
+      "  to: '${1:recipient@example.com}',",
+      "  subject: '${2:Email Subject}',",
+      "  body: '${3:Email body text}',",
+      "  // Optional parameters:",
+      "  // cc: 'cc@example.com',",
+      "  // bcc: 'bcc@example.com',",
+      "  // htmlBody: '<h1>HTML content</h1>',",
+      "  // attachments: [file]",
+      "});$0"
+    ],
+    "description": "Send an email using MailApp"
+  }
+}
