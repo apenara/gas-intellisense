@@ -79,5 +79,10 @@
     "type": "git",
     "url": "https://github.com/apenara/gas-intellisense"
   },
+  "author": {
+    "name": "Alfonso Peñaranda van Bommel",
+    "url": "https://buymeacoffee.com/apenaravan"
+  },
+  "homepage": "https://github.com/apenara/gas-intellisense#readme",
   "license": "MIT"
 }

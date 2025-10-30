@@ -73,5 +73,280 @@
       "});$0"
     ],
     "description": "Send an email using MailApp"
+  },
+  "Get Cell Range": {
+    "prefix": "getRange",
+    "body": [
+      "const sheet = SpreadsheetApp.getActiveSheet();",
+      "const range = sheet.getRange('${1:A1}');",
+      "$0"
+    ],
+    "description": "Get a cell or range using A1 notation"
+  },
+  "Get Range Values": {
+    "prefix": "getValues",
+    "body": [
+      "const sheet = SpreadsheetApp.getActiveSheet();",
+      "const values = sheet.getRange('${1:A1:B10}').getValues();",
+      "",
+      "// values is a 2D array: [[row1col1, row1col2], [row2col1, row2col2], ...]",
+      "values.forEach(row => {",
+      "  Logger.log(row);",
+      "});",
+      "$0"
+    ],
+    "description": "Get all values from a range as a 2D array"
+  },
+  "Set Cell Value": {
+    "prefix": "setValue",
+    "body": [
+      "const sheet = SpreadsheetApp.getActiveSheet();",
+      "sheet.getRange('${1:A1}').setValue('${2:value}');",
+      "$0"
+    ],
+    "description": "Set a single cell value"
+  },
+  "Append Row": {
+    "prefix": "appendRow",
+    "body": [
+      "const sheet = SpreadsheetApp.getActiveSheet();",
+      "sheet.appendRow([${1:'value1', 'value2', 'value3'}]);",
+      "$0"
+    ],
+    "description": "Add a new row to the end of the sheet"
+  },
+  "Get Data Range": {
+    "prefix": "getDataRange",
+    "body": [
+      "const sheet = SpreadsheetApp.getActiveSheet();",
+      "const dataRange = sheet.getDataRange();",
+      "const values = dataRange.getValues();",
+      "$0"
+    ],
+    "description": "Get all data in the sheet (smart range detection)"
+  },
+  "Clear Range": {
+    "prefix": "clearRange",
+    "body": [
+      "const sheet = SpreadsheetApp.getActiveSheet();",
+      "sheet.getRange('${1:A1:B10}').clear();",
+      "// Or clearContent() to keep formatting, clearFormat() to keep content",
+      "$0"
+    ],
+    "description": "Clear contents of a cell range"
+  },
+  "Insert Sheet": {
+    "prefix": "insertSheet",
+    "body": [
+      "const ss = SpreadsheetApp.getActiveSpreadsheet();",
+      "const newSheet = ss.insertSheet('${1:Sheet Name}');",
+      "$0"
+    ],
+    "description": "Create a new sheet in the spreadsheet"
+  },
+  "Delete Sheet": {
+    "prefix": "deleteSheet",
+    "body": [
+      "const ss = SpreadsheetApp.getActiveSpreadsheet();",
+      "const sheet = ss.getSheetByName('${1:Sheet Name}');",
+      "if (sheet && ss.getSheets().length > 1) {",
+      "  ss.deleteSheet(sheet);",
+      "}",
+      "$0"
+    ],
+    "description": "Delete a sheet by name (with safety check)"
+  },
+  "Log Message": {
+    "prefix": "log",
+    "body": [
+      "Logger.log('${1:message}');",
+      "$0"
+    ],
+    "description": "Quick log message for debugging"
+  },
+  "Log Object": {
+    "prefix": "logObj",
+    "body": [
+      "Logger.log(JSON.stringify(${1:object}, null, 2));",
+      "$0"
+    ],
+    "description": "Pretty-print object for debugging"
+  },
+  "Log Array": {
+    "prefix": "logArray",
+    "body": [
+      "${1:array}.forEach((item, index) => {",
+      "  Logger.log(`[${index}]: ${item}`);",
+      "});",
+      "$0"
+    ],
+    "description": "Debug array contents with indices"
+  },
+  "Try-Catch Block": {
+    "prefix": "tryCatch",
+    "body": [
+      "try {",
+      "  ${1:// Your code here}",
+      "} catch (error) {",
+      "  Logger.log('Error: ' + error.toString());",
+      "  // Handle error",
+      "  $0",
+      "}"
+    ],
+    "description": "Error handling with try-catch"
+  },
+  "doPost Web App": {
+    "prefix": "doPost",
+    "body": [
+      "function doPost(e) {",
+      "  // Handle POST request from form/webhook",
+      "  const params = e.postData.contents;",
+      "  const data = JSON.parse(params);",
+      "  ",
+      "  // Process data",
+      "  Logger.log(data);",
+      "  ",
+      "  // Return response",
+      "  return ContentService",
+      "    .createTextOutput(JSON.stringify({ status: 'success' }))",
+      "    .setMimeType(ContentService.MimeType.JSON);",
+      "}"
+    ],
+    "description": "Create a doPost handler for web apps (POST requests)"
+  },
+  "onInstall Trigger": {
+    "prefix": "onInstall",
+    "body": [
+      "function onInstall(e) {",
+      "  // Run setup code when add-on is installed",
+      "  onOpen(e);",
+      "  ",
+      "  // Additional installation setup",
+      "  ${1:// Initialize properties, create sheets, etc.}",
+      "  $0",
+      "}"
+    ],
+    "description": "Setup code when add-on is installed"
+  },
+  "onFormSubmit Trigger": {
+    "prefix": "onSubmit",
+    "body": [
+      "function onFormSubmit(e) {",
+      "  // Handle form submission",
+      "  const responses = e.values;",
+      "  const timestamp = responses[0];",
+      "  ",
+      "  Logger.log('Form submitted at: ' + timestamp);",
+      "  ${1:// Process form data}",
+      "  $0",
+      "}"
+    ],
+    "description": "Handle Google Form submissions"
+  },
+  "Send HTML Email": {
+    "prefix": "sendEmailHtml",
+    "body": [
+      "MailApp.sendEmail({",
+      "  to: '${1:recipient@example.com}',",
+      "  subject: '${2:Email Subject}',",
+      "  body: 'This email requires HTML support.',",
+      "  htmlBody: `",
+      "    <html>",
+      "      <body style=\"font-family: Arial, sans-serif;\">",
+      "        <h1>${3:Hello}</h1>",
+      "        <p>${4:Your message here}</p>",
+      "      </body>",
+      "    </html>",
+      "  `",
+      "});",
+      "$0"
+    ],
+    "description": "Send HTML formatted email"
+  },
+  "Send Email with Attachment": {
+    "prefix": "sendEmailAttach",
+    "body": [
+      "const file = DriveApp.getFileById('${1:fileId}');",
+      "MailApp.sendEmail({",
+      "  to: '${2:recipient@example.com}',",
+      "  subject: '${3:Email Subject}',",
+      "  body: '${4:Please find the attachment.}',",
+      "  attachments: [file.getAs(MimeType.PDF)]",
+      "});",
+      "$0"
+    ],
+    "description": "Send email with file attachment from Drive"
+  },
+  "Create Email Draft": {
+    "prefix": "createDraft",
+    "body": [
+      "GmailApp.createDraft(",
+      "  '${1:recipient@example.com}',",
+      "  '${2:Email Subject}',",
+      "  '${3:Email body text}'",
+      ");",
+      "$0"
+    ],
+    "description": "Create email draft without sending"
+  },
+  "Get Unread Emails": {
+    "prefix": "getUnreadEmails",
+    "body": [
+      "const threads = GmailApp.search('is:unread ${1:label:inbox}', 0, ${2:10});",
+      "threads.forEach(thread => {",
+      "  const messages = thread.getMessages();",
+      "  messages.forEach(message => {",
+      "    Logger.log('From: ' + message.getFrom());",
+      "    Logger.log('Subject: ' + message.getSubject());",
+      "  });",
+      "});",
+      "$0"
+    ],
+    "description": "Get and process unread emails"
+  },
+  "Reply to Email": {
+    "prefix": "replyEmail",
+    "body": [
+      "const threads = GmailApp.search('${1:subject:\"Original Subject\"}', 0, 1);",
+      "if (threads.length > 0) {",
+      "  threads[0].reply('${2:Your reply message}');",
+      "}",
+      "$0"
+    ],
+    "description": "Reply to an email thread"
+  },
+  "Mark Email as Read": {
+    "prefix": "markAsRead",
+    "body": [
+      "const threads = GmailApp.search('is:unread ${1:label:inbox}');",
+      "threads.forEach(thread => {",
+      "  thread.markRead();",
+      "});",
+      "$0"
+    ],
+    "description": "Mark email threads as read"
+  },
+  "Add Gmail Label": {
+    "prefix": "addLabel",
+    "body": [
+      "const label = GmailApp.getUserLabelByName('${1:Label Name}') || GmailApp.createLabel('${1:Label Name}');",
+      "const threads = GmailApp.search('${2:search query}');",
+      "threads.forEach(thread => {",
+      "  thread.addLabel(label);",
+      "});",
+      "$0"
+    ],
+    "description": "Add label to email threads"
+  },
+  "Archive Email Thread": {
+    "prefix": "archiveThread",
+    "body": [
+      "const threads = GmailApp.search('${1:search query}');",
+      "threads.forEach(thread => {",
+      "  thread.moveToArchive();",
+      "});",
+      "$0"
+    ],
+    "description": "Archive email threads"
   }
 }
