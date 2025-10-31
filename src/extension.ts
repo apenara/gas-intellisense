@@ -9,19 +9,27 @@ import * as fs from 'fs';
 export function activate(context: vscode.ExtensionContext) {
 	console.log('GAS IntelliSense extension is now active!');
 
-	// Setup type definitions by creating a proper workspace configuration
-	const workspaceFolders = vscode.workspace.workspaceFolders;
-	if (workspaceFolders && workspaceFolders.length > 0) {
-		for (const folder of workspaceFolders) {
-			setupTypeDefinitions(folder.uri.fsPath, context.extensionPath);
+	// Check if we should prompt for workspace setup when .gs files are opened
+	context.subscriptions.push(
+		vscode.workspace.onDidOpenTextDocument(async (document) => {
+			if (document.fileName.endsWith('.gs')) {
+				await promptForWorkspaceSetup(context);
+			}
+		})
+	);
+
+	// Check currently open documents for .gs files
+	vscode.workspace.textDocuments.forEach(async (document) => {
+		if (document.fileName.endsWith('.gs')) {
+			await promptForWorkspaceSetup(context);
 		}
-	}
+	});
 
 	// Watch for new workspace folders
 	context.subscriptions.push(
-		vscode.workspace.onDidChangeWorkspaceFolders(e => {
+		vscode.workspace.onDidChangeWorkspaceFolders(async (e) => {
 			for (const folder of e.added) {
-				setupTypeDefinitions(folder.uri.fsPath, context.extensionPath);
+				await promptForWorkspaceSetup(context);
 			}
 		})
 	);
@@ -33,34 +41,110 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 	context.subscriptions.push(hoverProvider);
 
-	// Register a command (optional - for future use)
+	// Register manual setup command
+	const setupCommand = vscode.commands.registerCommand('gas-intellisense.setupWorkspace', async () => {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		if (workspaceFolders && workspaceFolders.length > 0) {
+			for (const folder of workspaceFolders) {
+				await setupTypeDefinitions(folder.uri.fsPath, context.extensionPath, context);
+			}
+		} else {
+			vscode.window.showWarningMessage('No workspace folder open. Please open a folder first.');
+		}
+	});
+	context.subscriptions.push(setupCommand);
+
+	// Register hello world command (for testing)
 	const disposable = vscode.commands.registerCommand('gas-intellisense.helloWorld', () => {
 		vscode.window.showInformationMessage('GAS IntelliSense is working!');
 	});
-
 	context.subscriptions.push(disposable);
+}
+
+/**
+ * Prompts the user to set up the workspace for GAS IntelliSense
+ * Only prompts once per workspace unless user explicitly requests setup again
+ */
+async function promptForWorkspaceSetup(context: vscode.ExtensionContext): Promise<void> {
+	const workspaceFolders = vscode.workspace.workspaceFolders;
+	if (!workspaceFolders || workspaceFolders.length === 0) {
+		return;
+	}
+
+	// Check if we've already asked the user for this workspace
+	const workspaceId = workspaceFolders[0].uri.fsPath;
+	const setupKey = `gas-intellisense.setup.${workspaceId}`;
+	const setupState = context.workspaceState.get<string>(setupKey);
+
+	if (setupState === 'completed' || setupState === 'declined') {
+		// User has already made a choice for this workspace
+		return;
+	}
+
+	// Check if setup is already done (config files exist)
+	const folder = workspaceFolders[0];
+	const jsconfigPath = path.join(folder.uri.fsPath, 'jsconfig.json');
+	const tsconfigPath = path.join(folder.uri.fsPath, 'tsconfig.json');
+
+	if (fs.existsSync(tsconfigPath) || fs.existsSync(jsconfigPath)) {
+		// Configuration already exists, mark as completed
+		await context.workspaceState.update(setupKey, 'completed');
+		return;
+	}
+
+	// Show setup prompt
+	const choice = await vscode.window.showInformationMessage(
+		'GAS IntelliSense can configure your workspace for better Google Apps Script IntelliSense. This will create a jsconfig.json file and copy type definitions. Would you like to set up now?',
+		'Yes',
+		'No',
+		'Don\'t Ask Again'
+	);
+
+	if (choice === 'Yes') {
+		// User agreed, set up all workspace folders
+		for (const folder of workspaceFolders) {
+			await setupTypeDefinitions(folder.uri.fsPath, context.extensionPath, context);
+		}
+		await context.workspaceState.update(setupKey, 'completed');
+	} else if (choice === 'Don\'t Ask Again') {
+		// User doesn't want to be asked again for this workspace
+		await context.workspaceState.update(setupKey, 'declined');
+		vscode.window.showInformationMessage(
+			'You can manually set up the workspace later using the command: "GAS: Setup Workspace"'
+		);
+	}
+	// If 'No', we don't save state, so we'll ask again next time a .gs file is opened
 }
 
 /**
  * Sets up type definitions for Google Apps Script in the workspace
  */
-function setupTypeDefinitions(workspacePath: string, extensionPath: string) {
+async function setupTypeDefinitions(
+	workspacePath: string,
+	extensionPath: string,
+	context: vscode.ExtensionContext
+): Promise<boolean> {
 	const jsconfigPath = path.join(workspacePath, 'jsconfig.json');
 	const tsconfigPath = path.join(workspacePath, 'tsconfig.json');
 
 	// Check if there's already a config file
 	if (fs.existsSync(tsconfigPath) || fs.existsSync(jsconfigPath)) {
 		console.log('TypeScript/JavaScript config already exists, skipping auto-setup');
-		return;
+		vscode.window.showInformationMessage(
+			'GAS IntelliSense: Workspace already configured (existing config file found)'
+		);
+		return true;
 	}
 
 	// Copy type definitions to workspace node_modules
 	const workspaceTypesDir = path.join(workspacePath, 'node_modules', '@types', 'google-apps-script');
-	const extensionTypesDir = path.join(extensionPath, 'node_modules', '@types', 'google-apps-script');
+	const extensionTypesDir = path.join(extensionPath, 'typedefs', 'google-apps-script');
 
 	if (!fs.existsSync(extensionTypesDir)) {
-		console.error('@types/google-apps-script not found in extension');
-		return;
+		const errorMsg = 'Bundled type definitions not found in extension. Please reinstall the extension.';
+		console.error(errorMsg);
+		vscode.window.showErrorMessage('GAS IntelliSense: ' + errorMsg);
+		return false;
 	}
 
 	try {
@@ -87,15 +171,23 @@ function setupTypeDefinitions(workspacePath: string, extensionPath: string) {
 		fs.writeFileSync(jsconfigPath, JSON.stringify(jsconfig, null, 2));
 		console.log('Created jsconfig.json and copied GAS type definitions');
 
-		// Notify the user
-		vscode.window.showInformationMessage(
-			'GAS IntelliSense: Workspace configured for Google Apps Script'
+		// Notify the user with option to reload
+		const choice = await vscode.window.showInformationMessage(
+			'GAS IntelliSense: Workspace configured successfully! Reload the window to activate IntelliSense for Google Apps Script.',
+			'Reload Now',
+			'Later'
 		);
 
-		// Reload the window to pick up the new types
-		vscode.commands.executeCommand('workbench.action.reloadWindow');
+		if (choice === 'Reload Now') {
+			await vscode.commands.executeCommand('workbench.action.reloadWindow');
+		}
+
+		return true;
 	} catch (error) {
-		console.error('Failed to setup GAS types:', error);
+		const errorMsg = `Failed to setup GAS types: ${error}`;
+		console.error(errorMsg);
+		vscode.window.showErrorMessage('GAS IntelliSense: ' + errorMsg);
+		return false;
 	}
 }
 
@@ -365,6 +457,384 @@ class GasHoverProvider implements vscode.HoverProvider {
 				description: 'Return text content from a script. Use for creating web service responses.',
 				link: 'https://developers.google.com/apps-script/reference/content/content-service',
 				example: 'return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);'
+			},
+
+			// Additional Spreadsheet Methods
+			'getSheetByName': {
+				name: 'Spreadsheet.getSheetByName(name)',
+				description: 'Returns a sheet with the specified name. Returns null if no sheet with that name exists.',
+				link: 'https://developers.google.com/apps-script/reference/spreadsheet/spreadsheet#getsheetbynamename',
+				example: 'const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(\'Sales\');'
+			},
+			'deleteRow': {
+				name: 'Sheet.deleteRow(rowPosition)',
+				description: 'Deletes the row at the specified position.',
+				link: 'https://developers.google.com/apps-script/reference/spreadsheet/sheet#deleterowrowposition',
+				example: 'sheet.deleteRow(5); // Delete row 5'
+			},
+			'insertRows': {
+				name: 'Sheet.insertRows(rowIndex, numRows)',
+				description: 'Inserts one or more consecutive blank rows starting at the specified location.',
+				link: 'https://developers.google.com/apps-script/reference/spreadsheet/sheet#insertrowsrowindex,-numrows',
+				example: 'sheet.insertRows(3, 2); // Insert 2 rows at position 3'
+			},
+			'getLastRow': {
+				name: 'Sheet.getLastRow()',
+				description: 'Returns the position of the last row that has content.',
+				link: 'https://developers.google.com/apps-script/reference/spreadsheet/sheet#getlastrow',
+				example: 'const lastRow = sheet.getLastRow();'
+			},
+			'getLastColumn': {
+				name: 'Sheet.getLastColumn()',
+				description: 'Returns the position of the last column that has content.',
+				link: 'https://developers.google.com/apps-script/reference/spreadsheet/sheet#getlastcolumn',
+				example: 'const lastCol = sheet.getLastColumn();'
+			},
+			'setFormula': {
+				name: 'Range.setFormula(formula)',
+				description: 'Sets the formula for the range. The formula is in A1 notation.',
+				link: 'https://developers.google.com/apps-script/reference/spreadsheet/range#setformulaformula',
+				example: 'range.setFormula(\'=SUM(A1:A10)\');'
+			},
+			'copyTo': {
+				name: 'Range.copyTo(destination)',
+				description: 'Copies the data from a range to another range. Both values and formatting are copied.',
+				link: 'https://developers.google.com/apps-script/reference/spreadsheet/range#copytodestination',
+				example: 'sourceRange.copyTo(destinationRange);'
+			},
+
+			// Advanced Gmail Methods
+			'createLabel': {
+				name: 'GmailApp.createLabel(name)',
+				description: 'Creates a new label. Throws an error if a label with that name already exists.',
+				link: 'https://developers.google.com/apps-script/reference/gmail/gmail-app#createlabelname',
+				example: 'const label = GmailApp.createLabel(\'Important\');'
+			},
+			'getInboxThreads': {
+				name: 'GmailApp.getInboxThreads()',
+				description: 'Retrieves all threads in the inbox.',
+				link: 'https://developers.google.com/apps-script/reference/gmail/gmail-app#getinboxthreads',
+				example: 'const threads = GmailApp.getInboxThreads();'
+			},
+			'getDrafts': {
+				name: 'GmailApp.getDrafts()',
+				description: 'Gets all Gmail draft messages.',
+				link: 'https://developers.google.com/apps-script/reference/gmail/gmail-app#getdrafts',
+				example: 'const drafts = GmailApp.getDrafts();'
+			},
+			'markRead': {
+				name: 'GmailThread.markRead()',
+				description: 'Marks this thread as read.',
+				link: 'https://developers.google.com/apps-script/reference/gmail/gmail-thread#markread',
+				example: 'thread.markRead();'
+			},
+			'moveToTrash': {
+				name: 'GmailThread.moveToTrash()',
+				description: 'Moves this thread to the trash.',
+				link: 'https://developers.google.com/apps-script/reference/gmail/gmail-thread#movetotrash',
+				example: 'thread.moveToTrash();'
+			},
+
+			// Drive Methods
+			'getFiles': {
+				name: 'Folder.getFiles()',
+				description: 'Gets a collection of all files in the folder.',
+				link: 'https://developers.google.com/apps-script/reference/drive/folder#getfiles',
+				example: 'const files = folder.getFiles();\nwhile (files.hasNext()) {\n  const file = files.next();\n}'
+			},
+			'getFolders': {
+				name: 'Folder.getFolders()',
+				description: 'Gets a collection of all folders in the folder.',
+				link: 'https://developers.google.com/apps-script/reference/drive/folder#getfolders',
+				example: 'const folders = folder.getFolders();'
+			},
+			'createFile': {
+				name: 'Folder.createFile(blob)',
+				description: 'Creates a file in the folder from a given Blob of arbitrary data.',
+				link: 'https://developers.google.com/apps-script/reference/drive/folder#createfileblob',
+				example: 'const file = folder.createFile(Utilities.newBlob(\'Hello World\', \'text/plain\', \'file.txt\'));'
+			},
+			'makeCopy': {
+				name: 'File.makeCopy(name)',
+				description: 'Creates a copy of the file. If no name is provided, uses a default name.',
+				link: 'https://developers.google.com/apps-script/reference/drive/file#makecopyname',
+				example: 'const copy = file.makeCopy(\'Copy of \' + file.getName());'
+			},
+			'setSharing': {
+				name: 'File.setSharing(accessType, permissionType)',
+				description: 'Sets the sharing access and permissions for the file.',
+				link: 'https://developers.google.com/apps-script/reference/drive/file#setsharingaccesstype,-permissiontype',
+				example: 'file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);'
+			},
+
+			// Calendar Methods
+			'getEvents': {
+				name: 'Calendar.getEvents(startTime, endTime)',
+				description: 'Gets all events that occur within a given time range.',
+				link: 'https://developers.google.com/apps-script/reference/calendar/calendar#geteventsstarttime,-endtime',
+				example: 'const events = calendar.getEvents(new Date(), new Date(Date.now() + 7*24*60*60*1000));'
+			},
+			'createAllDayEvent': {
+				name: 'Calendar.createAllDayEvent(title, date)',
+				description: 'Creates a new all-day event.',
+				link: 'https://developers.google.com/apps-script/reference/calendar/calendar#createalldayeventtitle,-date',
+				example: 'calendar.createAllDayEvent(\'Holiday\', new Date(\'July 4, 2024\'));'
+			},
+			'getCalendarById': {
+				name: 'CalendarApp.getCalendarById(id)',
+				description: 'Gets the calendar with the specified ID.',
+				link: 'https://developers.google.com/apps-script/reference/calendar/calendar-app#getcalendarbyidid',
+				example: 'const calendar = CalendarApp.getCalendarById(\'primary\');'
+			},
+
+			// Document Methods
+			'getBody': {
+				name: 'Document.getBody()',
+				description: 'Retrieves the document body. The body includes all document elements.',
+				link: 'https://developers.google.com/apps-script/reference/document/document#getbody',
+				example: 'const body = DocumentApp.getActiveDocument().getBody();'
+			},
+			'appendParagraph': {
+				name: 'Body.appendParagraph(text)',
+				description: 'Creates and appends a new Paragraph containing the given text contents.',
+				link: 'https://developers.google.com/apps-script/reference/document/body#appendparagraphtext',
+				example: 'body.appendParagraph(\'This is a new paragraph\');'
+			},
+			'appendTable': {
+				name: 'Body.appendTable(cells)',
+				description: 'Creates and appends a new Table containing the specified cells.',
+				link: 'https://developers.google.com/apps-script/reference/document/body#appendtablecells',
+				example: 'body.appendTable([[\'Row 1, Cell 1\', \'Row 1, Cell 2\']]);'
+			},
+			'openById': {
+				name: 'DocumentApp.openById(id)',
+				description: 'Opens and returns the document with the specified ID.',
+				link: 'https://developers.google.com/apps-script/reference/document/document-app#openbyidid',
+				example: 'const doc = DocumentApp.openById(\'abc123xyz\');'
+			},
+
+			// Forms Methods
+			'create': {
+				name: 'FormApp.create(title)',
+				description: 'Creates and returns a new Form with the given title.',
+				link: 'https://developers.google.com/apps-script/reference/forms/form-app#createtitle',
+				example: 'const form = FormApp.create(\'Customer Survey\');'
+			},
+			'addMultipleChoiceItem': {
+				name: 'Form.addMultipleChoiceItem()',
+				description: 'Adds a new multiple-choice question to the form.',
+				link: 'https://developers.google.com/apps-script/reference/forms/form#addmultiplechoiceitem',
+				example: 'form.addMultipleChoiceItem().setTitle(\'Choose one\').setChoices([...]);'
+			},
+			'addTextItem': {
+				name: 'Form.addTextItem()',
+				description: 'Adds a new text question to the form.',
+				link: 'https://developers.google.com/apps-script/reference/forms/form#addtextitem',
+				example: 'form.addTextItem().setTitle(\'What is your name?\').setRequired(true);'
+			},
+			'getResponses': {
+				name: 'Form.getResponses()',
+				description: 'Gets all responses to the form.',
+				link: 'https://developers.google.com/apps-script/reference/forms/form#getresponses',
+				example: 'const responses = form.getResponses();'
+			},
+
+			// Slides Methods
+			'appendSlide': {
+				name: 'Presentation.appendSlide()',
+				description: 'Appends a blank slide to the end of the presentation.',
+				link: 'https://developers.google.com/apps-script/reference/slides/presentation#appendslide',
+				example: 'const slide = presentation.appendSlide();'
+			},
+			'getSlides': {
+				name: 'Presentation.getSlides()',
+				description: 'Gets the slides in the presentation.',
+				link: 'https://developers.google.com/apps-script/reference/slides/presentation#getslides',
+				example: 'const slides = presentation.getSlides();'
+			},
+			'insertShape': {
+				name: 'Slide.insertShape(shapeType)',
+				description: 'Inserts a shape on the slide.',
+				link: 'https://developers.google.com/apps-script/reference/slides/slide#insertshapeshapetype',
+				example: 'slide.insertShape(SlidesApp.ShapeType.RECTANGLE);'
+			},
+
+			// Utilities Methods
+			'formatDate': {
+				name: 'Utilities.formatDate(date, timeZone, format)',
+				description: 'Formats a date using the specified time zone and format string.',
+				link: 'https://developers.google.com/apps-script/reference/utilities/utilities#formatdatedate,-timezone,-format',
+				example: 'const formatted = Utilities.formatDate(new Date(), \'GMT\', \'yyyy-MM-dd HH:mm:ss\');'
+			},
+			'sleep': {
+				name: 'Utilities.sleep(milliseconds)',
+				description: 'Sleeps for specified number of milliseconds. Maximum time is 300000 milliseconds (5 minutes).',
+				link: 'https://developers.google.com/apps-script/reference/utilities/utilities#sleepmilliseconds',
+				example: 'Utilities.sleep(1000); // Sleep for 1 second'
+			},
+			'base64Encode': {
+				name: 'Utilities.base64Encode(data)',
+				description: 'Generates a base64-encoded string from the given string or byte array.',
+				link: 'https://developers.google.com/apps-script/reference/utilities/utilities#base64encodedata',
+				example: 'const encoded = Utilities.base64Encode(\'Hello World\');'
+			},
+			'computeDigest': {
+				name: 'Utilities.computeDigest(algorithm, value)',
+				description: 'Computes a digest using the specified algorithm on the specified value.',
+				link: 'https://developers.google.com/apps-script/reference/utilities/utilities#computedigestalgorithm,-value',
+				example: 'const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, \'input\');'
+			},
+			'parseCsv': {
+				name: 'Utilities.parseCsv(csv)',
+				description: 'Returns a two-dimensional array representing the values in a CSV string.',
+				link: 'https://developers.google.com/apps-script/reference/utilities/utilities#parsecsvcsv',
+				example: 'const data = Utilities.parseCsv(\'a,b,c\\n1,2,3\');'
+			},
+
+			// UrlFetchApp Methods
+			'fetch': {
+				name: 'UrlFetchApp.fetch(url, params)',
+				description: 'Makes an HTTP request to a URL and returns the response.',
+				link: 'https://developers.google.com/apps-script/reference/url-fetch/url-fetch-app#fetchurl,-params',
+				example: 'const response = UrlFetchApp.fetch(\'https://api.example.com/data\');'
+			},
+			'fetchAll': {
+				name: 'UrlFetchApp.fetchAll(requests)',
+				description: 'Fetches multiple URLs simultaneously.',
+				link: 'https://developers.google.com/apps-script/reference/url-fetch/url-fetch-app#fetchallrequests',
+				example: 'const responses = UrlFetchApp.fetchAll([{url: \'url1\'}, {url: \'url2\'}]);'
+			},
+			'getContentText': {
+				name: 'HTTPResponse.getContentText()',
+				description: 'Returns the content of an HTTP response as a string.',
+				link: 'https://developers.google.com/apps-script/reference/url-fetch/http-response#getcontenttext',
+				example: 'const text = response.getContentText();'
+			},
+
+			// Properties Service Methods
+			'getScriptProperties': {
+				name: 'PropertiesService.getScriptProperties()',
+				description: 'Gets a property store that all users of this script can access.',
+				link: 'https://developers.google.com/apps-script/reference/properties/properties-service#getscriptproperties',
+				example: 'const props = PropertiesService.getScriptProperties();'
+			},
+			'getUserProperties': {
+				name: 'PropertiesService.getUserProperties()',
+				description: 'Gets a property store that is specific to the current user.',
+				link: 'https://developers.google.com/apps-script/reference/properties/properties-service#getuserproperties',
+				example: 'const userProps = PropertiesService.getUserProperties();'
+			},
+			'getProperty': {
+				name: 'Properties.getProperty(key)',
+				description: 'Gets the value associated with the given key in the current Properties store.',
+				link: 'https://developers.google.com/apps-script/reference/properties/properties#getpropertykey',
+				example: 'const value = props.getProperty(\'myKey\');'
+			},
+			'setProperty': {
+				name: 'Properties.setProperty(key, value)',
+				description: 'Sets the value associated with the given key in the current Properties store.',
+				link: 'https://developers.google.com/apps-script/reference/properties/properties#setpropertykey,-value',
+				example: 'props.setProperty(\'myKey\', \'myValue\');'
+			},
+
+			// Cache Service Methods
+			'getScriptCache': {
+				name: 'CacheService.getScriptCache()',
+				description: 'Gets a cache that is common to all users of the script.',
+				link: 'https://developers.google.com/apps-script/reference/cache/cache-service#getscriptcache',
+				example: 'const cache = CacheService.getScriptCache();'
+			},
+			'getUserCache': {
+				name: 'CacheService.getUserCache()',
+				description: 'Gets a cache that is specific to the current user.',
+				link: 'https://developers.google.com/apps-script/reference/cache/cache-service#getusercache',
+				example: 'const userCache = CacheService.getUserCache();'
+			},
+			'put': {
+				name: 'Cache.put(key, value, expirationInSeconds)',
+				description: 'Adds a key/value pair to the cache. Maximum expiration is 6 hours (21600 seconds).',
+				link: 'https://developers.google.com/apps-script/reference/cache/cache#putkey,-value,-expirationinseconds',
+				example: 'cache.put(\'myKey\', \'myValue\', 600); // Cache for 10 minutes'
+			},
+			'get': {
+				name: 'Cache.get(key)',
+				description: 'Gets the value for the given key from the cache. Returns null if not found or expired.',
+				link: 'https://developers.google.com/apps-script/reference/cache/cache#getkey',
+				example: 'const value = cache.get(\'myKey\');'
+			},
+
+			// Script Service Methods
+			'newTrigger': {
+				name: 'ScriptApp.newTrigger(functionName)',
+				description: 'Creates a new trigger builder. Must call create() to build and install the trigger.',
+				link: 'https://developers.google.com/apps-script/reference/script/script-app#newtriggerfunctionname',
+				example: 'ScriptApp.newTrigger(\'myFunction\').timeBased().everyHours(1).create();'
+			},
+			'getProjectTriggers': {
+				name: 'ScriptApp.getProjectTriggers()',
+				description: 'Gets all installable triggers owned by this user in this project.',
+				link: 'https://developers.google.com/apps-script/reference/script/script-app#getprojecttriggers',
+				example: 'const triggers = ScriptApp.getProjectTriggers();'
+			},
+			'deleteTrigger': {
+				name: 'ScriptApp.deleteTrigger(trigger)',
+				description: 'Deletes the specified trigger.',
+				link: 'https://developers.google.com/apps-script/reference/script/script-app#deletetriggertrigger',
+				example: 'ScriptApp.deleteTrigger(trigger);'
+			},
+
+			// Session Methods
+			'Session': {
+				name: 'Session',
+				description: 'Access information about the current user and execution context.',
+				link: 'https://developers.google.com/apps-script/reference/base/session',
+				example: 'const email = Session.getActiveUser().getEmail();'
+			},
+			'getActiveUser': {
+				name: 'Session.getActiveUser()',
+				description: 'Gets the currently active user. Returns null in some contexts.',
+				link: 'https://developers.google.com/apps-script/reference/base/session#getactiveuser',
+				example: 'const user = Session.getActiveUser();'
+			},
+			'getEffectiveUser': {
+				name: 'Session.getEffectiveUser()',
+				description: 'Gets the effective user. This is the user whose permissions are being used.',
+				link: 'https://developers.google.com/apps-script/reference/base/session#geteffectiveuser',
+				example: 'const effectiveUser = Session.getEffectiveUser();'
+			},
+			'getTimeZone': {
+				name: 'Session.getScriptTimeZone()',
+				description: 'Gets the time zone of the script.',
+				link: 'https://developers.google.com/apps-script/reference/base/session#getscripttimezone',
+				example: 'const timeZone = Session.getScriptTimeZone();'
+			},
+
+			// Lock Service
+			'LockService': {
+				name: 'LockService',
+				description: 'Prevents concurrent access to sections of code. Useful for avoiding race conditions.',
+				link: 'https://developers.google.com/apps-script/reference/lock/lock-service',
+				example: 'const lock = LockService.getScriptLock();\nlock.waitLock(30000); // Wait up to 30 seconds\ntry {\n  // Critical section\n} finally {\n  lock.releaseLock();\n}'
+			},
+			'getScriptLock': {
+				name: 'LockService.getScriptLock()',
+				description: 'Gets a lock that prevents any user from concurrently running a section of code.',
+				link: 'https://developers.google.com/apps-script/reference/lock/lock-service#getscriptlock',
+				example: 'const lock = LockService.getScriptLock();'
+			},
+
+			// Blob and Utilities
+			'newBlob': {
+				name: 'Utilities.newBlob(data, contentType, name)',
+				description: 'Creates a new Blob object from a string, byte array, or data source.',
+				link: 'https://developers.google.com/apps-script/reference/utilities/utilities#newblobdata,-contenttype,-name',
+				example: 'const blob = Utilities.newBlob(\'Hello World\', \'text/plain\', \'hello.txt\');'
+			},
+			'zip': {
+				name: 'Utilities.zip(blobs, name)',
+				description: 'Creates a new Blob object that is a zip file containing the specified blobs.',
+				link: 'https://developers.google.com/apps-script/reference/utilities/utilities#zipblobs,-name',
+				example: 'const zipBlob = Utilities.zip([blob1, blob2], \'archive.zip\');'
 			}
 		};
 		/* eslint-enable @typescript-eslint/naming-convention */

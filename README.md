@@ -286,7 +286,14 @@ The extension works out of the box with zero configuration. Optional settings:
 
 ## How It Works
 
-This extension bundles the official `@types/google-apps-script` type definitions and registers `.gs` files with VS Code's JavaScript language server. The TypeScript/JavaScript language server automatically provides IntelliSense using these type definitions.
+This extension bundles the official `@types/google-apps-script` type definitions and registers `.gs` files with VS Code's JavaScript language server.
+
+When you first open a `.gs` file, the extension will prompt you to set up your workspace for enhanced IntelliSense. If you agree:
+1. A `jsconfig.json` file will be created in your workspace
+2. Type definitions will be copied to your workspace's `node_modules/@types` folder
+3. You'll be prompted to reload VS Code to activate full IntelliSense
+
+**Opt-in by design** - The extension respects your workspace and only makes changes with your permission. You can also manually run the setup anytime using the command palette: `GAS: Setup Workspace`.
 
 **No internet connection required** - all type definitions are bundled with the extension.
 
@@ -312,17 +319,33 @@ This extension focuses solely on **IntelliSense and code editing**. It does not:
 
 ## Troubleshooting
 
+### Didn't see the setup prompt?
+
+If you missed the initial setup prompt or clicked "No":
+1. Open the command palette (Ctrl+Shift+P / Cmd+Shift+P)
+2. Type "GAS: Setup Workspace"
+3. Press Enter to run the manual setup
+
 ### IntelliSense not appearing?
 
 1. Make sure the file has a `.gs` extension
-2. Try reloading VS Code (Ctrl+Shift+P → "Developer: Reload Window")
-3. Check that the extension is activated (look for "GAS IntelliSense" in the status bar)
+2. Check if workspace setup has been completed (look for `jsconfig.json` in your workspace)
+3. If not set up, run "GAS: Setup Workspace" from the command palette
+4. Try reloading VS Code (Ctrl+Shift+P → "Developer: Reload Window")
+5. Check that the extension is activated (Extensions panel → GAS IntelliSense should show as active)
 
 ### Snippets not working?
 
 1. Check that `gasIntellisense.enableSnippets` is set to `true` (default)
 2. Make sure you're in a JavaScript context (.gs file)
 3. Type the snippet prefix and press Tab or Enter
+
+### Setup prompt appearing repeatedly?
+
+This shouldn't happen, but if it does:
+1. Check if `jsconfig.json` or `tsconfig.json` exists in your workspace
+2. Try running "GAS: Setup Workspace" manually to complete setup
+3. If the issue persists, try reloading VS Code
 
 ### Types seem outdated?
 
