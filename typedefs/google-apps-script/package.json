@@ -1,0 +1,41 @@
+{
+    "name": "@types/google-apps-script",
+    "version": "2.0.7",
+    "description": "TypeScript definitions for google-apps-script",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/google-apps-script",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Justin Poehnelt",
+            "githubUsername": "jpoehnelt",
+            "url": "https://github.com/jpoehnelt"
+        },
+        {
+            "name": "Steve Bazyl",
+            "githubUsername": "sqrrrl",
+            "url": "https://github.com/sqrrrl"
+        },
+        {
+            "name": "Pierrick Voulet",
+            "githubUsername": "PierrickVoulet",
+            "url": "https://github.com/PierrickVoulet"
+        },
+        {
+            "name": "Vinay Vyas",
+            "githubUsername": "vinay-google",
+            "url": "https://github.com/vinay-google"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/google-apps-script"
+    },
+    "scripts": {},
+    "dependencies": {},
+    "peerDependencies": {},
+    "typesPublisherContentHash": "80526c54daf14ef441d66e4c3abc28fadf649f6a2b55192c69dd785b72f2367b",
+    "typeScriptVersion": "5.2"
+}
