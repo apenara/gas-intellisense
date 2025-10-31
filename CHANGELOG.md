@@ -2,7 +2,7 @@
 
 All notable changes to the "gas-intellisense" extension will be documented in this file.
 
-## [1.1.0] - 2025-10-30
+## [2.0.0] - 2025-10-30
 
 ### Fixed
 - **[Critical]** Bundled type definitions directly into extension to fix marketplace installation
