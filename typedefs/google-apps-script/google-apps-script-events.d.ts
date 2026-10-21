@@ -113,3 +113,11 @@ declare namespace GoogleAppsScript {
         }
     }
 }
+
+// Global trigger function declarations for zero-config IntelliSense
+declare function onOpen(e: GoogleAppsScript.Events.SheetsOnOpen): void;
+declare function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit): void;
+declare function onFormSubmit(e: GoogleAppsScript.Events.SheetsOnFormSubmit): void;
+declare function onChange(e: GoogleAppsScript.Events.SheetsOnChange): void;
+declare function doGet(e: GoogleAppsScript.Events.DoGet): any;
+declare function doPost(e: GoogleAppsScript.Events.DoPost): any;
